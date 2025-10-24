@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Random Groups</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="app__header">
+        <button id="saveButton" class="button button--primary">Speichern</button>
+        <h1 class="app__title">Gruppen-Konfiguration</h1>
+      </header>
+
+      <section class="app__section">
+        <h2 class="section__title">Klassenverwaltung</h2>
+        <div class="section__content">
+          <label class="field">
+            <span class="field__label">Vorhandene Klasse</span>
+            <select id="classSelect" class="field__control"></select>
+          </label>
+          <div class="button-group">
+            <button id="createClassButton" class="button">Neue Klasse</button>
+            <button id="deleteClassButton" class="button button--danger">Klasse löschen</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="app__section">
+        <h2 class="section__title">Klassen-Details</h2>
+        <div class="section__content" id="classDetails"></div>
+      </section>
+    </main>
+
+    <template id="classTemplate">
+      <label class="field">
+        <span class="field__label">Name der Klasse</span>
+        <input type="text" class="field__control" data-field="name" />
+      </label>
+
+      <div class="learners">
+        <div class="learners__header">
+          <h3>Lernende</h3>
+          <button class="button button--small" data-action="add-learner">Lernende·n hinzufügen</button>
+        </div>
+        <ul class="learners__list" data-list="learners"></ul>
+      </div>
+    </template>
+
+    <template id="learnerTemplate">
+      <li class="learner">
+        <input type="text" class="field__control learner__input" placeholder="Name" />
+        <button class="button button--icon" title="Entfernen" data-action="remove-learner">✕</button>
+      </li>
+    </template>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
