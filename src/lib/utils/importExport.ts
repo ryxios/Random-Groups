@@ -37,7 +37,7 @@ export async function importFromCsv(file: File): Promise<ImportResult> {
   const result = Papa.parse<Record<string, string>>(text, {
     header: true,
     skipEmptyLines: true,
-    transform: (value) => value.trim()
+    transform: (value) => (typeof value === 'string' ? value.trim() : '')
   });
 
   if (result.errors.length) {
