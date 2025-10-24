@@ -71,7 +71,9 @@
         }
 
         function resetResult() {
-                result = null;
+                if (result !== null) {
+                        result = null;
+                }
         }
 
         function addLearner() {
@@ -108,13 +110,19 @@
                 resetResult();
         }
 
-        function updateLearners() {
-                learners = learners.map((entry) => ({ ...entry }));
-                resetResult();
-        }
+        function handleRelationshipChange(
+                learnerId: string,
+                kind: 'prefer' | 'avoid',
+                event: Event
+        ) {
+                const target = event.currentTarget as HTMLSelectElement | null;
+                if (!target) return;
 
-        function handleRelationshipChange() {
-                updateLearners();
+                const selected = Array.from(target.selectedOptions, (option) => option.value);
+                learners = learners.map((entry) =>
+                        entry.id === learnerId ? { ...entry, [kind]: selected } : entry
+                );
+                resetResult();
         }
 
         function handleModeChange(mode: GroupingConfig['mode']) {
@@ -246,9 +254,6 @@
                                 />
                         </label>
                         <div class="flex items-end gap-3">
-                                <button class="btn bg-sky-600 text-white hover:bg-sky-700" type="button" on:click={handleSave}
-                                        >Speichern</button
-                                >
                                 <button
                                         class="btn border border-sky-600 text-sky-700 hover:bg-sky-50"
                                         type="button"
@@ -374,13 +379,13 @@
                                                                         class="input"
                                                                         type="text"
                                                                         bind:value={learner.name}
-                                                                        on:input={updateLearners}
+                                                                        on:input={resetResult}
                                                                         placeholder="Name"
                                                                 />
                                                                 <select
                                                                         class="input"
                                                                         bind:value={learner.performance}
-                                                                        on:change={updateLearners}
+                                                                        on:change={resetResult}
                                                                 >
                                                                         <option value="high">Leistungsstark</option>
                                                                         <option value="medium">Ausgeglichen</option>
@@ -390,7 +395,7 @@
                                                                         class="textarea"
                                                                         rows={2}
                                                                         bind:value={learner.notes}
-                                                                        on:input={updateLearners}
+                                                                        on:input={resetResult}
                                                                         placeholder="Bemerkungen"
                                                                 ></textarea>
                                                         </div>
@@ -409,12 +414,22 @@
                                                                 <select
                                                                         class="input min-h-[6rem]"
                                                                         multiple
-                                                                        bind:value={learner.prefer}
-                                                                        on:change={handleRelationshipChange}
+                                                                        on:change={(event) =>
+                                                                                handleRelationshipChange(
+                                                                                        learner.id,
+                                                                                        'prefer',
+                                                                                        event
+                                                                                )
+                                                                        }
                                                                 >
                                                                         {#each learners as other (other.id)}
                                                                                 {#if other.id !== learner.id}
-                                                                                        <option value={other.id}>{other.name}</option>
+                                                                                        <option
+                                                                                                value={other.id}
+                                                                                                selected={learner.prefer.includes(other.id)}
+                                                                                        >
+                                                                                                {other.name}
+                                                                                        </option>
                                                                                 {/if}
                                                                         {/each}
                                                                 </select>
@@ -424,12 +439,22 @@
                                                                 <select
                                                                         class="input min-h-[6rem]"
                                                                         multiple
-                                                                        bind:value={learner.avoid}
-                                                                        on:change={handleRelationshipChange}
+                                                                        on:change={(event) =>
+                                                                                handleRelationshipChange(
+                                                                                        learner.id,
+                                                                                        'avoid',
+                                                                                        event
+                                                                                )
+                                                                        }
                                                                 >
                                                                         {#each learners as other (other.id)}
                                                                                 {#if other.id !== learner.id}
-                                                                                        <option value={other.id}>{other.name}</option>
+                                                                                        <option
+                                                                                                value={other.id}
+                                                                                                selected={learner.avoid.includes(other.id)}
+                                                                                        >
+                                                                                                {other.name}
+                                                                                        </option>
                                                                                 {/if}
                                                                         {/each}
                                                                 </select>
@@ -446,6 +471,13 @@
         </section>
 
         <section class="grid gap-6 rounded-xl bg-surface-100-900/60 p-6 shadow">
+                <button
+                        class="btn self-start bg-sky-600 text-white hover:bg-sky-700"
+                        type="button"
+                        on:click={handleSave}
+                >
+                        Speichern
+                </button>
                 <h2 class="text-xl font-semibold">Gruppen-Konfiguration</h2>
                 <div class="grid gap-4 md:grid-cols-2">
                         <div class="space-y-3">
