@@ -38,6 +38,19 @@
         let worker: Worker | null = null;
         let generating = false;
         let result: GroupingResult | null = null;
+        let settingsOpen = false;
+        let activeLearnerId: string | null = null;
+
+        $: sortedLearners = [...learners].sort((a, b) =>
+                a.name.localeCompare(b.name, 'de', { sensitivity: 'base' })
+        );
+
+        $: activeLearner =
+                activeLearnerId ? learners.find((entry) => entry.id === activeLearnerId) ?? null : null;
+
+        $: if (activeLearnerId && !activeLearner) {
+                closeLearnerSettings();
+        }
 
         onMount(() => {
                 if (!browser) return;
@@ -76,6 +89,57 @@
                 }
         }
 
+        function openLearnerSettings(id: string) {
+                activeLearnerId = id;
+                settingsOpen = true;
+        }
+
+        function closeLearnerSettings() {
+                settingsOpen = false;
+                activeLearnerId = null;
+        }
+
+        function handleSettingsKeydown(event: KeyboardEvent) {
+                if (settingsOpen && event.key === 'Escape') {
+                        closeLearnerSettings();
+                }
+        }
+
+        function updateLearnerName(id: string, name: string) {
+                learners = learners.map((entry) => (entry.id === id ? { ...entry, name } : entry));
+                resetResult();
+        }
+
+        function updateLearnerPerformance(
+                id: string,
+                performance: LearnerRecord['performance']
+        ) {
+                learners = learners.map((entry) =>
+                        entry.id === id ? { ...entry, performance } : entry
+                );
+                resetResult();
+        }
+
+        function updateLearnerNotes(id: string, notes: string) {
+                learners = learners.map((entry) =>
+                        entry.id === id ? { ...entry, notes: notes.trim() || undefined } : entry
+                );
+                resetResult();
+        }
+
+        function handleOverlayKeydown(event: KeyboardEvent) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        closeLearnerSettings();
+                }
+        }
+
+        function handleOverlayClick(event: MouseEvent) {
+                if (event.target === event.currentTarget) {
+                        closeLearnerSettings();
+                }
+        }
+
         function addLearner() {
                 if (!newLearnerName.trim()) {
                         errorMessage = 'Bitte einen Namen eingeben.';
@@ -108,6 +172,12 @@
                                 avoid: entry.avoid.filter((ref) => ref !== id)
                         }));
                 resetResult();
+        }
+
+        function handlePerformanceSelect(event: Event, learnerId: string) {
+                const target = event.currentTarget as HTMLSelectElement | null;
+                if (!target) return;
+                updateLearnerPerformance(learnerId, target.value as LearnerRecord['performance']);
         }
 
         function handleRelationshipChange(
@@ -226,6 +296,8 @@
                 }
         }
 </script>
+
+<svelte:window on:keydown={handleSettingsKeydown} />
 
 <svelte:head>
         <title>Zufällige Lerngruppen</title>
@@ -370,103 +442,36 @@
                 {#if learners.length === 0}
                         <p class="text-sm opacity-70">Noch keine Lernenden erfasst.</p>
                 {:else}
-                        <div class="grid gap-4 md:grid-cols-2">
-                                {#each learners as learner (learner.id)}
-                                        <article class="card flex flex-col gap-3">
-                                                <div class="flex items-start justify-between gap-2">
-                                                        <div class="flex-1 space-y-2">
-                                                                <input
-                                                                        class="input"
-                                                                        type="text"
-                                                                        bind:value={learner.name}
-                                                                        on:input={resetResult}
-                                                                        placeholder="Name"
-                                                                />
-                                                                <select
-                                                                        class="input"
-                                                                        bind:value={learner.performance}
-                                                                        on:change={resetResult}
-                                                                >
-                                                                        <option value="high">Leistungsstark</option>
-                                                                        <option value="medium">Ausgeglichen</option>
-                                                                        <option value="low">Unterstützend</option>
-                                                                </select>
-                                                                <textarea
-                                                                        class="textarea"
-                                                                        rows={2}
-                                                                        bind:value={learner.notes}
-                                                                        on:input={resetResult}
-                                                                        placeholder="Bemerkungen"
-                                                                ></textarea>
-                                                        </div>
+                        <ul class="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white text-slate-900 shadow-sm dark:divide-slate-700/80 dark:border-slate-700/80 dark:bg-surface-200-800/80">
+                                {#each sortedLearners as learner (learner.id)}
+                                        <li class="flex items-center justify-between gap-3 px-4 py-3">
+                                                <div class="min-w-0 flex-1">
+                                                        <p class="truncate font-medium">{learner.name}</p>
+                                                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                                                                {performanceLabel(learner.performance)} · {learner.prefer.length} Wunschkontakte · {learner.avoid.length} Trennungen
+                                                        </p>
+                                                </div>
+                                                <div class="flex items-center gap-2">
+                                                        <button
+                                                                class="btn btn-icon border border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                                                                type="button"
+                                                                aria-label={`Einstellungen für ${learner.name} öffnen`}
+                                                                on:click={() => openLearnerSettings(learner.id)}
+                                                        >
+                                                                ⚙️
+                                                        </button>
                                                         <button
                                                                 class="btn btn-icon border border-transparent bg-rose-600 text-white hover:bg-rose-700"
                                                                 type="button"
-                                                                aria-label="Lernende entfernen"
+                                                                aria-label={`Lernende·n ${learner.name} entfernen`}
                                                                 on:click={() => removeLearner(learner.id)}
                                                         >
                                                                 ✕
                                                         </button>
                                                 </div>
-                                                <div class="grid gap-3 md:grid-cols-2">
-                                                        <label class="flex flex-col gap-1 text-sm">
-                                                                <span class="font-medium">Arbeitet gerne mit …</span>
-                                                                <select
-                                                                        class="input min-h-[6rem]"
-                                                                        multiple
-                                                                        on:change={(event) =>
-                                                                                handleRelationshipChange(
-                                                                                        learner.id,
-                                                                                        'prefer',
-                                                                                        event
-                                                                                )
-                                                                        }
-                                                                >
-                                                                        {#each learners as other (other.id)}
-                                                                                {#if other.id !== learner.id}
-                                                                                        <option
-                                                                                                value={other.id}
-                                                                                                selected={learner.prefer.includes(other.id)}
-                                                                                        >
-                                                                                                {other.name}
-                                                                                        </option>
-                                                                                {/if}
-                                                                        {/each}
-                                                                </select>
-                                                        </label>
-                                                        <label class="flex flex-col gap-1 text-sm">
-                                                                <span class="font-medium">Soll getrennt werden von …</span>
-                                                                <select
-                                                                        class="input min-h-[6rem]"
-                                                                        multiple
-                                                                        on:change={(event) =>
-                                                                                handleRelationshipChange(
-                                                                                        learner.id,
-                                                                                        'avoid',
-                                                                                        event
-                                                                                )
-                                                                        }
-                                                                >
-                                                                        {#each learners as other (other.id)}
-                                                                                {#if other.id !== learner.id}
-                                                                                        <option
-                                                                                                value={other.id}
-                                                                                                selected={learner.avoid.includes(other.id)}
-                                                                                        >
-                                                                                                {other.name}
-                                                                                        </option>
-                                                                                {/if}
-                                                                        {/each}
-                                                                </select>
-                                                        </label>
-                                                </div>
-                                                <p class="text-xs opacity-60">
-                                                        {performanceLabel(learner.performance)} · {learner.prefer.length} Wunschkontakte · {learner.avoid.length}
-                                                        Trennungen
-                                                </p>
-                                        </article>
+                                        </li>
                                 {/each}
-                        </div>
+                        </ul>
                 {/if}
         </section>
 
@@ -616,5 +621,139 @@
                                 </div>
                         {/if}
                 </section>
+        {/if}
+
+        {#if settingsOpen && activeLearner}
+                <div
+                        class="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/60 px-4 py-6"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="learner-settings-title"
+                        tabindex="-1"
+                        on:keydown={handleOverlayKeydown}
+                        on:click={handleOverlayClick}
+                >
+                        <div
+                                class="w-full max-w-xl space-y-6 rounded-xl bg-surface-100-900/95 p-6 shadow-2xl backdrop-blur"
+                        >
+                                <div class="flex items-start justify-between gap-3">
+                                        <div class="space-y-1">
+                                                <h3 id="learner-settings-title" class="text-lg font-semibold">
+                                                        Einstellungen für {activeLearner.name}
+                                                </h3>
+                                                <p class="text-sm text-slate-500 dark:text-slate-300">
+                                                        Änderungen werden automatisch übernommen.
+                                                </p>
+                                        </div>
+                                        <button
+                                                class="btn btn-icon border border-transparent bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+                                                type="button"
+                                                aria-label="Einstellungsfenster schließen"
+                                                on:click={closeLearnerSettings}
+                                        >
+                                                ✕
+                                        </button>
+                                </div>
+
+                                <div class="grid gap-4">
+                                        <label class="flex flex-col gap-2">
+                                                <span class="text-sm font-medium">Name</span>
+                                                <input
+                                                        class="input"
+                                                        type="text"
+                                                        value={activeLearner.name}
+                                                        on:input={(event) =>
+                                                                updateLearnerName(
+                                                                        activeLearner.id,
+                                                                        (event.currentTarget as HTMLInputElement).value
+                                                                )
+                                                        }
+                                                />
+                                        </label>
+                                        <label class="flex flex-col gap-2">
+                                                <span class="text-sm font-medium">Leistungsniveau</span>
+                                                <select
+                                                        class="input"
+                                                        value={activeLearner.performance}
+                                                        on:change={(event) =>
+                                                                handlePerformanceSelect(event, activeLearner.id)
+                                                        }
+                                                >
+                                                        <option value="high">Leistungsstark</option>
+                                                        <option value="medium">Ausgeglichen</option>
+                                                        <option value="low">Unterstützend</option>
+                                                </select>
+                                        </label>
+                                        <label class="flex flex-col gap-2">
+                                                <span class="text-sm font-medium">Notiz (optional)</span>
+                                                <textarea
+                                                        class="textarea"
+                                                        rows={3}
+                                                        value={activeLearner.notes ?? ''}
+                                                        on:input={(event) =>
+                                                                updateLearnerNotes(
+                                                                        activeLearner.id,
+                                                                        (event.currentTarget as HTMLTextAreaElement).value
+                                                                )
+                                                        }
+                                                ></textarea>
+                                        </label>
+                                        <div class="grid gap-4 md:grid-cols-2">
+                                                <label class="flex flex-col gap-2 text-sm">
+                                                        <span class="font-medium">Arbeitet gerne mit …</span>
+                                                        <select
+                                                                class="input min-h-[8rem]"
+                                                                multiple
+                                                                on:change={(event) =>
+                                                                        handleRelationshipChange(activeLearner.id, 'prefer', event)
+                                                                }
+                                                        >
+                                                                {#each sortedLearners as other (other.id)}
+                                                                        {#if other.id !== activeLearner.id}
+                                                                                <option
+                                                                                        value={other.id}
+                                                                                        selected={activeLearner.prefer.includes(other.id)}
+                                                                                >
+                                                                                        {other.name}
+                                                                                </option>
+                                                                        {/if}
+                                                                {/each}
+                                                        </select>
+                                                </label>
+                                                <label class="flex flex-col gap-2 text-sm">
+                                                        <span class="font-medium">Soll getrennt werden von …</span>
+                                                        <select
+                                                                class="input min-h-[8rem]"
+                                                                multiple
+                                                                on:change={(event) =>
+                                                                        handleRelationshipChange(activeLearner.id, 'avoid', event)
+                                                                }
+                                                        >
+                                                                {#each sortedLearners as other (other.id)}
+                                                                        {#if other.id !== activeLearner.id}
+                                                                                <option
+                                                                                        value={other.id}
+                                                                                        selected={activeLearner.avoid.includes(other.id)}
+                                                                                >
+                                                                                        {other.name}
+                                                                                </option>
+                                                                        {/if}
+                                                                {/each}
+                                                        </select>
+                                                </label>
+                                        </div>
+                                </div>
+
+                                <div class="flex justify-end">
+                                        <button
+                                                class="btn bg-slate-200 text-slate-800 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+                                                type="button"
+                                                on:click={closeLearnerSettings}
+                                        >
+                                                Schließen
+                                        </button>
+                                </div>
+                        </div>
+                </div>
         {/if}
 </main>
