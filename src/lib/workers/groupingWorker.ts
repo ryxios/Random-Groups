@@ -80,8 +80,40 @@ function buildGroups(learners: LearnerRecord[], config: GroupingConfig): Groupin
 }
 
 function determineGroupCount(total: number, config: GroupingConfig): number {
+  if (total <= 0) {
+    return 0;
+  }
+
   if (config.mode === 'groupSize' && config.groupSize) {
-    return Math.max(1, Math.ceil(total / Math.max(1, config.groupSize)));
+    const targetSize = Math.max(1, config.groupSize);
+    let bestCount = 1;
+    let bestScore = Number.POSITIVE_INFINITY;
+    let bestDiff = Number.POSITIVE_INFINITY;
+    let bestPenalty = Number.POSITIVE_INFINITY;
+
+    for (let candidate = 1; candidate <= total; candidate += 1) {
+      const averageSize = total / candidate;
+      const minSize = Math.floor(averageSize);
+      const diff = Math.abs(averageSize - targetSize);
+      const penalty = minSize < targetSize ? targetSize - minSize : 0;
+      const score = diff + penalty;
+
+      if (
+        score < bestScore - Number.EPSILON ||
+        (Math.abs(score - bestScore) <= Number.EPSILON &&
+          (diff < bestDiff - Number.EPSILON ||
+            (Math.abs(diff - bestDiff) <= Number.EPSILON &&
+              (penalty < bestPenalty - Number.EPSILON ||
+                (Math.abs(penalty - bestPenalty) <= Number.EPSILON && candidate > bestCount)))))
+      ) {
+        bestCount = candidate;
+        bestScore = score;
+        bestDiff = diff;
+        bestPenalty = penalty;
+      }
+    }
+
+    return bestCount;
   }
   if (config.mode === 'groupCount' && config.groupCount) {
     return Math.max(1, config.groupCount);
@@ -90,8 +122,17 @@ function determineGroupCount(total: number, config: GroupingConfig): number {
 }
 
 function determineCapacities(total: number, groupCount: number, config: GroupingConfig): number[] {
+  if (groupCount <= 0) {
+    return [];
+  }
+
   if (config.mode === 'groupSize' && config.groupSize) {
-    return Array.from({ length: groupCount }, () => Math.max(1, config.groupSize!));
+    const base = Math.floor(total / groupCount);
+    const remainder = total % groupCount;
+    return Array.from({ length: groupCount }, (_, index) => {
+      const capacity = base + (index < remainder ? 1 : 0);
+      return capacity > 0 ? capacity : 1;
+    });
   }
 
   const base = Math.floor(total / groupCount);
