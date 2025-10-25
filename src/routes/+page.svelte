@@ -22,8 +22,14 @@
         let currentClassId: string | null = null;
         let savedClasses: StoredClass[] = [];
         let selectedStoredClass = '';
-        let importMessages: string[] = [];
         let errorMessage = '';
+        let createClassModalOpen = false;
+        let createClassName = '';
+        let createClassLearnerText = '';
+        let createClassImportWarnings: string[] = [];
+        let createClassError = '';
+        let importedLearnerDraft: LearnerRecord[] = [];
+        let learnersPanelOpen = false;
 
         type LegacyLearnerRecord = Omit<LearnerRecord, 'prefer' | 'avoid' | 'never'> & {
                 prefer?: string[];
@@ -69,6 +75,9 @@
 
         $: activeLearner =
                 activeLearnerId ? learners.find((entry) => entry.id === activeLearnerId) ?? null : null;
+
+        $: hasActiveClass = currentClassId !== null || learners.length > 0;
+        $: displayedClassName = hasActiveClass ? className?.trim() || 'Unbenannte Klasse' : 'Keine Klasse geladen';
 
         $: if (activeLearnerId && !activeLearner) {
                 closeLearnerSettings();
@@ -125,6 +134,10 @@
                 if (settingsOpen && event.key === 'Escape') {
                         closeLearnerSettings();
                 }
+
+                if (createClassModalOpen && event.key === 'Escape') {
+                        closeCreateClassModal();
+                }
         }
 
         function updateLearnerName(id: string, name: string) {
@@ -159,6 +172,32 @@
         function handleOverlayClick(event: MouseEvent) {
                 if (event.target === event.currentTarget) {
                         closeLearnerSettings();
+                }
+        }
+
+        function closeCreateClassModal() {
+                createClassModalOpen = false;
+        }
+
+        function openCreateClassModal() {
+                createClassModalOpen = true;
+                createClassName = '';
+                createClassLearnerText = '';
+                createClassImportWarnings = [];
+                createClassError = '';
+                importedLearnerDraft = [];
+        }
+
+        function handleCreateOverlayKeydown(event: KeyboardEvent) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        closeCreateClassModal();
+                }
+        }
+
+        function handleCreateOverlayClick(event: MouseEvent) {
+                if (event.target === event.currentTarget) {
+                        closeCreateClassModal();
                 }
         }
 
@@ -237,31 +276,7 @@
                 if (!worker) return;
                 generating = true;
                 errorMessage = '';
-                importMessages = [];
                 worker.postMessage({ learners, config });
-        }
-
-        async function handleImport(event: Event, type: 'csv' | 'json') {
-                const input = event.currentTarget as HTMLInputElement;
-                const files = input?.files;
-                if (!files || !files[0]) return;
-                const file = files[0];
-
-                try {
-                        const result =
-                                type === 'json' ? await importFromJson(file) : await importFromCsv(file);
-                        learners = result.data.learners.map((entry) => normalizeLearner(entry));
-                        importMessages = result.warnings;
-                        errorMessage = '';
-                        resetResult();
-                } catch (error) {
-                        errorMessage =
-                                error instanceof Error ? error.message : 'Import fehlgeschlagen. Bitte prüfen Sie die Datei.';
-                }
-
-                if (input) {
-                        input.value = '';
-                }
         }
 
         function handleExport(type: 'csv' | 'json') {
@@ -293,11 +308,6 @@
                 errorMessage = '';
         }
 
-        async function handleSaveAs() {
-                currentClassId = null;
-                await handleSave();
-        }
-
         async function handleLoad() {
                 if (!browser || !selectedStoredClass) return;
                 const stored = await loadClass(selectedStoredClass);
@@ -305,6 +315,7 @@
                 learners = stored.data.learners.map((entry) => normalizeLearner(entry));
                 className = stored.name;
                 currentClassId = stored.id;
+                learnersPanelOpen = false;
                 resetResult();
         }
 
@@ -328,6 +339,65 @@
                                 return 'mittel';
                 }
         }
+
+        async function handleCreateClassImport(event: Event, type: 'csv' | 'json') {
+                const input = event.currentTarget as HTMLInputElement;
+                const files = input?.files;
+                if (!files || !files[0]) return;
+                const file = files[0];
+
+                try {
+                        const result =
+                                type === 'json' ? await importFromJson(file) : await importFromCsv(file);
+                        importedLearnerDraft = result.data.learners.map((entry) => normalizeLearner(entry));
+                        createClassImportWarnings = result.warnings;
+                        createClassError = '';
+                } catch (error) {
+                        createClassError =
+                                error instanceof Error
+                                        ? error.message
+                                        : 'Import fehlgeschlagen. Bitte prüfen Sie die Datei.';
+                }
+
+                if (input) {
+                        input.value = '';
+                }
+        }
+
+        function parseLearnersFromText(text: string): LearnerRecord[] {
+                return text
+                        .split(/[,\n]/)
+                        .map((entry) => entry.trim())
+                        .filter((entry) => entry.length > 0)
+                        .map((name) => ({
+                                id: generateId('learner'),
+                                name,
+                                performance: 'medium',
+                                prefer: [],
+                                avoid: [],
+                                never: [] as string[],
+                                notes: undefined
+                        }));
+        }
+
+        async function createNewClass() {
+                const trimmedName = createClassName.trim() || 'Neue Klasse';
+                const manualLearners = parseLearnersFromText(createClassLearnerText);
+                const combined = [
+                        ...importedLearnerDraft.map((entry) => normalizeLearner(entry)),
+                        ...manualLearners
+                ];
+
+                learners = combined;
+                className = trimmedName;
+                currentClassId = null;
+                learnersPanelOpen = false;
+                resetResult();
+
+                await handleSave();
+                selectedStoredClass = currentClassId ?? '';
+                closeCreateClassModal();
+        }
 </script>
 
 <svelte:window on:keydown={handleSettingsKeydown} />
@@ -337,47 +407,33 @@
 </svelte:head>
 
 <main class="mx-auto max-w-6xl space-y-8 px-4 py-10">
-        <header class="flex flex-col gap-4 rounded-xl bg-surface-200-800/70 p-6 shadow-lg">
-                <h1 class="text-3xl font-semibold">Zufällige Lerngruppen planen</h1>
-                <p class="text-base opacity-80">
-                        Erstellen Sie ausgewogene Gruppen basierend auf Teamregeln, Leistungsniveaus und persönlichen Präferenzen.
-                        Im- und Export, lokale Speicherung und Offline-Unterstützung sind integriert.
-                </p>
+        <header class="rounded-xl bg-surface-200-800/70 p-6 shadow-lg">
+                <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div class="space-y-2">
+                                <h1 class="text-3xl font-semibold">Zufällige Lerngruppen planen</h1>
+                                <p class="text-base opacity-80">
+                                        Erstellen Sie ausgewogene Gruppen basierend auf Teamregeln, Leistungsniveaus und persönlichen Präferenzen. Im- und Export, lokale Speicherung und Offline-Unterstützung sind integriert.
+                                </p>
+                        </div>
+                        <button
+                                class="btn btn-icon self-start border border-sky-500 text-sky-600 hover:bg-sky-50"
+                                type="button"
+                                on:click={openCreateClassModal}
+                                aria-label="Neue Klasse anlegen"
+                        >
+                                ➕
+                        </button>
+                </div>
         </header>
 
         <section class="grid gap-6 rounded-xl bg-surface-100-900/60 p-6 shadow">
-                <h2 class="text-xl font-semibold">Klassenverwaltung</h2>
-                <div class="grid gap-4 md:grid-cols-2">
-                        <label class="flex flex-col gap-2">
-                                <span class="text-sm font-medium">Klassenname</span>
-                                <input
-                                        class="input"
-                                        type="text"
-                                        bind:value={className}
-                                        on:input={resetResult}
-                                        placeholder="z. B. Deutsch 10B"
-                                />
-                        </label>
-                        <div class="flex items-end gap-3">
-                                <button
-                                        class="btn border border-sky-600 text-sky-700 hover:bg-sky-50"
-                                        type="button"
-                                        on:click={handleSaveAs}
-                                >
-                                        Speichern als …
-                                </button>
+                <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                        <div class="flex-1">
+                                <h2 class="text-xl font-semibold">Gespeicherte Klassen</h2>
+                                <p class="text-sm opacity-75">
+                                        Wählen Sie eine Klasse aus der Liste aus oder erstellen Sie über das Plus-Symbol eine neue.
+                                </p>
                         </div>
-                </div>
-                <div class="grid gap-4 md:grid-cols-[2fr_1fr]">
-                        <label class="flex flex-col gap-2">
-                                <span class="text-sm font-medium">Gespeicherte Klasse laden</span>
-                                <select class="input" bind:value={selectedStoredClass}>
-                                        <option value="">– Auswahl –</option>
-                                        {#each savedClasses as stored (stored.id)}
-                                                <option value={stored.id}>{stored.name}</option>
-                                        {/each}
-                                </select>
-                        </label>
                         <div class="flex items-end gap-3">
                                 <button
                                         class="btn bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
@@ -397,125 +453,139 @@
                                 </button>
                         </div>
                 </div>
-        </section>
-
-        <section class="grid gap-6 rounded-xl bg-surface-100-900/60 p-6 shadow">
-                <h2 class="text-xl font-semibold">Daten importieren &amp; exportieren</h2>
-                <div class="grid gap-4 md:grid-cols-2">
-                        <label class="flex flex-col gap-2">
-                                <span class="text-sm font-medium">JSON importieren</span>
-                                <input
-                                        type="file"
-                                        accept="application/json"
-                                        on:change={(event) => handleImport(event, 'json')}
-                                />
-                        </label>
-                        <label class="flex flex-col gap-2">
-                                <span class="text-sm font-medium">CSV importieren</span>
-                                <input
-                                        type="file"
-                                        accept=".csv,text/csv"
-                                        on:change={(event) => handleImport(event, 'csv')}
-                                />
-                        </label>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                        <button
-                                class="btn border border-slate-400 text-slate-700 hover:bg-slate-100"
-                                type="button"
-                                on:click={() => handleExport('json')}
-                        >
-                                Als JSON exportieren
-                        </button>
-                        <button
-                                class="btn border border-slate-400 text-slate-700 hover:bg-slate-100"
-                                type="button"
-                                on:click={() => handleExport('csv')}
-                        >
-                                Als CSV exportieren
-                        </button>
-                </div>
-                {#if importMessages.length}
-                        <ul class="rounded-lg border border-warning-300/40 bg-warning-100/60 p-4 text-sm text-warning-900">
-                                {#each importMessages as message, index}
-                                        <li>{index + 1}. {message}</li>
+                <label class="flex flex-col gap-2">
+                        <span class="text-sm font-medium">Vorhandene Klassen</span>
+                        <select class="input" bind:value={selectedStoredClass}>
+                                <option value="">– Auswahl –</option>
+                                {#each savedClasses as stored (stored.id)}
+                                        <option value={stored.id}>{stored.name}</option>
                                 {/each}
-                        </ul>
-                {/if}
+                        </select>
+                </label>
+        </section>
+
+        
+
+        <section class="rounded-xl bg-surface-100-900/60 p-6 shadow">
+                <details
+                        class="group rounded-lg border border-slate-200 bg-white/90 p-4 dark:border-slate-700/80 dark:bg-surface-200-800/80"
+                        bind:open={learnersPanelOpen}
+                >
+                        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 text-left">
+                                <div class="space-y-1">
+                                        <p class="text-lg font-semibold">
+                                                {displayedClassName}
+                                        </p>
+                                        <p class="text-sm text-slate-500 dark:text-slate-300">
+                                                {learners.length} Lernende erfasst
+                                        </p>
+                                </div>
+                                <span class="text-sm font-medium text-sky-600">
+                                        {learnersPanelOpen ? 'Schließen' : 'Anzeigen'}
+                                </span>
+                        </summary>
+                        <div class="mt-4 space-y-6">
+                                <div class="grid gap-4 md:grid-cols-[2fr_auto] md:items-end">
+                                        <label class="flex flex-col gap-2">
+                                                <span class="text-sm font-medium">Klassenname</span>
+                                                <input
+                                                        class="input"
+                                                        type="text"
+                                                        bind:value={className}
+                                                        on:input={resetResult}
+                                                        placeholder="z. B. Deutsch 10B"
+                                                />
+                                        </label>
+                                        <div class="flex flex-wrap gap-3 md:justify-end">
+                                                <button
+                                                        class="btn bg-sky-600 text-white hover:bg-sky-700"
+                                                        type="button"
+                                                        on:click={handleSave}
+                                                >
+                                                        Speichern
+                                                </button>
+                                                <button
+                                                        class="btn border border-slate-400 text-slate-700 hover:bg-slate-100"
+                                                        type="button"
+                                                        on:click={() => handleExport('json')}
+                                                >
+                                                        Als JSON exportieren
+                                                </button>
+                                                <button
+                                                        class="btn border border-slate-400 text-slate-700 hover:bg-slate-100"
+                                                        type="button"
+                                                        on:click={() => handleExport('csv')}
+                                                >
+                                                        Als CSV exportieren
+                                                </button>
+                                        </div>
+                                </div>
+
+                                <div class="grid gap-4 md:grid-cols-3">
+                                        <label class="flex flex-col gap-2">
+                                                <span class="text-sm font-medium">Name</span>
+                                                <input class="input" type="text" bind:value={newLearnerName} placeholder="Max Mustermann" />
+                                        </label>
+                                        <label class="flex flex-col gap-2">
+                                                <span class="text-sm font-medium">Leistungsniveau</span>
+                                                <select class="input" bind:value={newLearnerPerformance}>
+                                                        <option value="high">hoch</option>
+                                                        <option value="medium">mittel</option>
+                                                        <option value="low">unterstützend</option>
+                                                </select>
+                                        </label>
+                                        <label class="flex flex-col gap-2 md:col-span-1">
+                                                <span class="text-sm font-medium">Notiz (optional)</span>
+                                                <input class="input" type="text" bind:value={newLearnerNotes} placeholder="z. B. arbeitet gerne ruhig" />
+                                        </label>
+                                </div>
+                                <button
+                                        class="btn self-start bg-sky-600 text-white hover:bg-sky-700"
+                                        type="button"
+                                        on:click={addLearner}
+                                >
+                                        Lernende hinzufügen
+                                </button>
+
+                                {#if learners.length === 0}
+                                        <p class="text-sm opacity-70">Noch keine Lernenden erfasst.</p>
+                                {:else}
+                                        <ul class="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white text-slate-900 shadow-sm dark:divide-slate-700/80 dark:border-slate-700/80 dark:bg-surface-200-800/80">
+                                                {#each sortedLearners as learner (learner.id)}
+                                                        <li class="flex items-center justify-between gap-3 px-4 py-3">
+                                                                <div class="min-w-0 flex-1">
+                                                                        <p class="truncate font-medium">{learner.name}</p>
+                                                                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                                                                                {performanceLabel(learner.performance)} · {learner.prefer.length} Wunschkontakte · {learner.avoid.length} Trennungen · {learner.never.length} Nie zusammen
+                                                                        </p>
+                                                                </div>
+                                                                <div class="flex items-center gap-2">
+                                                                        <button
+                                                                                class="btn btn-icon border border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                                                                                type="button"
+                                                                                aria-label={`Einstellungen für ${learner.name} öffnen`}
+                                                                                on:click={() => openLearnerSettings(learner.id)}
+                                                                        >
+                                                                                ⚙️
+                                                                        </button>
+                                                                        <button
+                                                                                class="btn btn-icon border border-transparent bg-rose-600 text-white hover:bg-rose-700"
+                                                                                type="button"
+                                                                                aria-label={`Lernende·n ${learner.name} entfernen`}
+                                                                                on:click={() => removeLearner(learner.id)}
+                                                                        >
+                                                                                ✕
+                                                                        </button>
+                                                                </div>
+                                                        </li>
+                                                {/each}
+                                        </ul>
+                                {/if}
+                        </div>
+                </details>
         </section>
 
         <section class="grid gap-6 rounded-xl bg-surface-100-900/60 p-6 shadow">
-                <h2 class="text-xl font-semibold">Lernende verwalten</h2>
-                <div class="grid gap-4 md:grid-cols-3">
-                        <label class="flex flex-col gap-2">
-                                <span class="text-sm font-medium">Name</span>
-                                <input class="input" type="text" bind:value={newLearnerName} placeholder="Max Mustermann" />
-                        </label>
-                        <label class="flex flex-col gap-2">
-                                <span class="text-sm font-medium">Leistungsniveau</span>
-                                <select class="input" bind:value={newLearnerPerformance}>
-                                        <option value="high">hoch</option>
-                                        <option value="medium">mittel</option>
-                                        <option value="low">unterstützend</option>
-                                </select>
-                        </label>
-                        <label class="flex flex-col gap-2 md:col-span-1">
-                                <span class="text-sm font-medium">Notiz (optional)</span>
-                                <input class="input" type="text" bind:value={newLearnerNotes} placeholder="z. B. arbeitet gerne ruhig" />
-                        </label>
-                </div>
-                <button
-                        class="btn self-start bg-sky-600 text-white hover:bg-sky-700"
-                        type="button"
-                        on:click={addLearner}
-                >
-                        Lernende hinzufügen
-                </button>
-
-                {#if learners.length === 0}
-                        <p class="text-sm opacity-70">Noch keine Lernenden erfasst.</p>
-                {:else}
-                        <ul class="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white text-slate-900 shadow-sm dark:divide-slate-700/80 dark:border-slate-700/80 dark:bg-surface-200-800/80">
-                                {#each sortedLearners as learner (learner.id)}
-                                        <li class="flex items-center justify-between gap-3 px-4 py-3">
-                                                <div class="min-w-0 flex-1">
-                                                        <p class="truncate font-medium">{learner.name}</p>
-                                                        <p class="text-xs text-slate-500 dark:text-slate-400">
-                                                                {performanceLabel(learner.performance)} · {learner.prefer.length} Wunschkontakte · {learner.avoid.length} Trennungen · {learner.never.length} Nie zusammen
-                                                        </p>
-                                                </div>
-                                                <div class="flex items-center gap-2">
-                                                        <button
-                                                                class="btn btn-icon border border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
-                                                                type="button"
-                                                                aria-label={`Einstellungen für ${learner.name} öffnen`}
-                                                                on:click={() => openLearnerSettings(learner.id)}
-                                                        >
-                                                                ⚙️
-                                                        </button>
-                                                        <button
-                                                                class="btn btn-icon border border-transparent bg-rose-600 text-white hover:bg-rose-700"
-                                                                type="button"
-                                                                aria-label={`Lernende·n ${learner.name} entfernen`}
-                                                                on:click={() => removeLearner(learner.id)}
-                                                        >
-                                                                ✕
-                                                        </button>
-                                                </div>
-                                        </li>
-                                {/each}
-                        </ul>
-                {/if}
-        </section>
-
-        <section class="grid gap-6 rounded-xl bg-surface-100-900/60 p-6 shadow">
-                <button
-                        class="btn self-start bg-sky-600 text-white hover:bg-sky-700"
-                        type="button"
-                        on:click={handleSave}
-                >
-                        Speichern
-                </button>
                 <h2 class="text-xl font-semibold">Gruppen-Konfiguration</h2>
                 <div class="grid gap-4 md:grid-cols-2">
                         <div class="space-y-3">
@@ -654,6 +724,119 @@
                                 </div>
                         {/if}
                 </section>
+        {/if}
+
+        {#if createClassModalOpen}
+                <div
+                        class="fixed inset-0 z-40 grid place-items-center bg-slate-900/60 px-4 py-6"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="create-class-title"
+                        tabindex="-1"
+                        on:keydown={handleCreateOverlayKeydown}
+                        on:click={handleCreateOverlayClick}
+                >
+                        <form
+                                class="w-full max-w-2xl space-y-6 rounded-xl bg-surface-100-900/95 p-6 shadow-2xl backdrop-blur"
+                                on:submit|preventDefault={createNewClass}
+                        >
+                                <div class="flex items-start justify-between gap-3">
+                                        <div class="space-y-1">
+                                                <h3 id="create-class-title" class="text-lg font-semibold">
+                                                        Neue Klasse anlegen
+                                                </h3>
+                                                <p class="text-sm text-slate-500 dark:text-slate-300">
+                                                        Benennen Sie die Klasse und importieren Sie vorhandene Daten oder fügen Sie eine Liste hinzu.
+                                                </p>
+                                        </div>
+                                        <button
+                                                class="btn btn-icon border border-transparent bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+                                                type="button"
+                                                aria-label="Erstellung abbrechen"
+                                                on:click={closeCreateClassModal}
+                                        >
+                                                ✕
+                                        </button>
+                                </div>
+
+                                <label class="flex flex-col gap-2">
+                                        <span class="text-sm font-medium">Klassenname</span>
+                                        <input
+                                                class="input"
+                                                type="text"
+                                                bind:value={createClassName}
+                                                placeholder="z. B. Mathematik 7A"
+                                                on:input={() => (createClassError = '')}
+                                        />
+                                </label>
+
+                                <div class="grid gap-4 md:grid-cols-2">
+                                        <label class="flex flex-col gap-2">
+                                                <span class="text-sm font-medium">JSON importieren</span>
+                                                <input
+                                                        type="file"
+                                                        accept="application/json"
+                                                        on:change={(event) => handleCreateClassImport(event, 'json')}
+                                                />
+                                        </label>
+                                        <label class="flex flex-col gap-2">
+                                                <span class="text-sm font-medium">CSV importieren</span>
+                                                <input
+                                                        type="file"
+                                                        accept=".csv,text/csv"
+                                                        on:change={(event) => handleCreateClassImport(event, 'csv')}
+                                                />
+                                        </label>
+                                </div>
+
+                                {#if createClassImportWarnings.length}
+                                        <ul class="rounded-lg border border-warning-300/40 bg-warning-100/60 p-4 text-sm text-warning-900">
+                                                {#each createClassImportWarnings as warning, index}
+                                                        <li>{index + 1}. {warning}</li>
+                                                {/each}
+                                        </ul>
+                                {/if}
+
+                                <label class="flex flex-col gap-2">
+                                        <span class="text-sm font-medium">Kommagetrennte Liste von Lernenden</span>
+                                        <textarea
+                                                class="textarea"
+                                                rows={4}
+                                                bind:value={createClassLearnerText}
+                                                placeholder="Max Mustermann, Erika Musterfrau, …"
+                                                on:input={() => (createClassError = '')}
+                                        ></textarea>
+                                        <span class="text-xs text-slate-500 dark:text-slate-300">
+                                                Namen mit Kommas trennen. Bereits importierte Lernende bleiben erhalten.
+                                        </span>
+                                </label>
+
+                                {#if importedLearnerDraft.length}
+                                        <p class="rounded border border-slate-300/60 bg-slate-100/60 px-3 py-2 text-sm text-slate-700 dark:border-slate-600/70 dark:bg-surface-200-800/70 dark:text-slate-200">
+                                                Bereits importiert: {importedLearnerDraft.length} Lernende.
+                                        </p>
+                                {/if}
+
+                                {#if createClassError}
+                                        <p class="rounded border border-error-300 bg-error-100 px-3 py-2 text-sm text-error-800">
+                                                {createClassError}
+                                        </p>
+                                {/if}
+
+                                <div class="flex justify-end gap-3">
+                                        <button
+                                                class="btn border border-slate-400 text-slate-700 hover:bg-slate-100"
+                                                type="button"
+                                                on:click={closeCreateClassModal}
+                                        >
+                                                Abbrechen
+                                        </button>
+                                        <button class="btn bg-sky-600 text-white hover:bg-sky-700" type="submit">
+                                                Klasse erstellen
+                                        </button>
+                                </div>
+                        </form>
+                </div>
         {/if}
 
         {#if settingsOpen && activeLearner}
