@@ -406,7 +406,7 @@
         <title>Zufällige Lerngruppen</title>
 </svelte:head>
 
-<main class="mx-auto max-w-6xl space-y-8 px-4 py-10">
+<main class="mx-auto max-w-6xl space-y-8 px-4 pt-10 pb-24">
         <header class="rounded-xl bg-surface-200-800/70 p-6 shadow-lg">
                 <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                         <div class="space-y-2">
@@ -415,14 +415,6 @@
                                         Erstellen Sie ausgewogene Gruppen basierend auf Teamregeln, Leistungsniveaus und persönlichen Präferenzen. Im- und Export, lokale Speicherung und Offline-Unterstützung sind integriert.
                                 </p>
                         </div>
-                        <button
-                                class="btn btn-icon self-start border border-sky-500 text-sky-600 hover:bg-sky-50"
-                                type="button"
-                                on:click={openCreateClassModal}
-                                aria-label="Neue Klasse anlegen"
-                        >
-                                ➕
-                        </button>
                 </div>
         </header>
 
@@ -685,12 +677,6 @@
                                                         {#each group.members as member (member.id)}
                                                                 <li class="rounded-lg bg-surface-200-800/70 px-3 py-2">
                                                                         <div class="font-medium">{member.name}</div>
-                                                                        <div class="text-xs opacity-70">
-                                                                                {performanceLabel(member.performance)}
-                                                                                {#if member.notes}
-                                                                                        · {member.notes}
-                                                                                {/if}
-                                                                        </div>
                                                                 </li>
                                                         {/each}
                                                 </ul>
@@ -707,24 +693,17 @@
                                         </ul>
                                 </div>
                         {/if}
-                        {#if result.issues.length}
-                                <div class="space-y-2">
-                                        <h3 class="text-lg font-semibold">Hinweise</h3>
-                                        {#each result.issues as issue, index}
-                                                <div
-                                                        class={`rounded-lg border px-3 py-2 text-sm ${
-                                                                issue.type === 'conflict'
-                                                                        ? 'border-error-400/60 bg-error-100/50 text-error-900'
-                                                                        : 'border-warning-400/60 bg-warning-100/50 text-warning-900'
-                                                        }`}
-                                                >
-                                                        {index + 1}. {issue.message}
-                                                </div>
-                                        {/each}
-                                </div>
-                        {/if}
                 </section>
         {/if}
+
+        <button
+                class="fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-sky-600 text-3xl text-white shadow-lg transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-300 dark:bg-sky-500 dark:hover:bg-sky-400 dark:focus:ring-sky-700"
+                type="button"
+                on:click={openCreateClassModal}
+                aria-label="Neue Klasse anlegen"
+        >
+                ➕
+        </button>
 
         {#if createClassModalOpen}
                 <div
