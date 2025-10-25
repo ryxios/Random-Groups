@@ -895,7 +895,7 @@
                                         </label>
                                         <div class="grid gap-4 md:grid-cols-3">
                                                 <RelationshipSelector
-                                                        label="Arbeitet gerne mit …"
+                                                        label="Wunschkontakt"
                                                         selected={activeLearner.prefer}
                                                         options={availableRelationshipOptions}
                                                         placeholder="Namen suchen"
@@ -908,7 +908,7 @@
                                                         }
                                                 />
                                                 <RelationshipSelector
-                                                        label="Soll getrennt werden von …"
+                                                        label="Trennung"
                                                         selected={activeLearner.avoid}
                                                         options={availableRelationshipOptions}
                                                         placeholder="Namen suchen"
@@ -921,7 +921,7 @@
                                                         }
                                                 />
                                                 <RelationshipSelector
-                                                        label="Nie in Gruppe mit …"
+                                                        label="Nie zusammen"
                                                         selected={activeLearner.never}
                                                         options={availableRelationshipOptions}
                                                         placeholder="Namen suchen"
