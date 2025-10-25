@@ -163,7 +163,7 @@
         }
 
         function handleOverlayKeydown(event: KeyboardEvent) {
-                if (event.key === 'Enter' || event.key === ' ') {
+                if (event.key === 'Escape') {
                         event.preventDefault();
                         closeLearnerSettings();
                 }
@@ -189,7 +189,7 @@
         }
 
         function handleCreateOverlayKeydown(event: KeyboardEvent) {
-                if (event.key === 'Enter' || event.key === ' ') {
+                if (event.key === 'Escape') {
                         event.preventDefault();
                         closeCreateClassModal();
                 }
