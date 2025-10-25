@@ -108,6 +108,7 @@ function placeLearner(
 ): boolean {
   const avoidSet = new Set(learner.avoid);
   const preferSet = new Set(learner.prefer);
+  const neverSet = new Set(learner.never);
 
   let candidates = groups
     .map((group, index) => ({
@@ -129,15 +130,31 @@ function placeLearner(
     return false;
   }
 
-  const safeCandidates = candidates.filter(
+  const neverSafeCandidates = candidates.filter(
+    ({ group }) =>
+      !group.members.some(
+        (member) => neverSet.has(member.id) || member.never.includes(learner.id)
+      )
+  );
+
+  if (neverSafeCandidates.length === 0) {
+    return false;
+  }
+
+  const avoidSafeCandidates = neverSafeCandidates.filter(
     ({ group }) => !group.members.some((member) => avoidSet.has(member.id))
   );
 
-  const preferCandidates = safeCandidates.filter(({ group }) =>
+  const preferCandidates = avoidSafeCandidates.filter(({ group }) =>
     group.members.some((member) => preferSet.has(member.id))
   );
 
-  const ranking = preferCandidates.length > 0 ? preferCandidates : safeCandidates.length > 0 ? safeCandidates : candidates;
+  const ranking =
+    preferCandidates.length > 0
+      ? preferCandidates
+      : avoidSafeCandidates.length > 0
+        ? avoidSafeCandidates
+        : neverSafeCandidates;
 
   const chosen = selectBestGroup(ranking, learner, config.balancePerformance ?? true);
 
@@ -145,7 +162,7 @@ function placeLearner(
     return false;
   }
 
-  if (safeCandidates.length === 0) {
+  if (avoidSafeCandidates.length === 0) {
     issues.push({
       type: 'warning',
       message: `${learner.name} musste trotz Konflikt zu einer bestehenden Gruppe hinzugefügt werden.`,
@@ -205,6 +222,17 @@ function evaluatePreferences(groups: InternalGroup[], issues: GroupingIssue[]) {
             type: 'conflict',
             message: `${member.name} sollte nicht mit ${peer.name} zusammenarbeiten.`,
             learnerIds: [member.id, avoidId]
+          });
+        }
+      }
+
+      for (const neverId of member.never) {
+        const forbidden = group.members.find((candidate) => candidate.id === neverId);
+        if (forbidden) {
+          issues.push({
+            type: 'conflict',
+            message: `${member.name} darf niemals mit ${forbidden.name} in einer Gruppe sein.`,
+            learnerIds: [member.id, neverId]
           });
         }
       }

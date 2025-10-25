@@ -2,6 +2,7 @@
         import { browser } from '$app/environment';
         import { onMount } from 'svelte';
         import type { GroupingConfig, GroupingResult, LearnerRecord, StoredClass } from '$lib/types';
+        import RelationshipSelector from '$lib/components/RelationshipSelector.svelte';
         import { generateId } from '$lib/utils/id';
         import {
                 deleteClass,
@@ -24,6 +25,22 @@
         let importMessages: string[] = [];
         let errorMessage = '';
 
+        type LegacyLearnerRecord = Omit<LearnerRecord, 'prefer' | 'avoid' | 'never'> & {
+                prefer?: string[];
+                avoid?: string[];
+                never?: string[];
+        };
+
+        function normalizeLearner(entry: LegacyLearnerRecord | LearnerRecord): LearnerRecord {
+                return {
+                        ...entry,
+                        prefer: entry.prefer ?? [],
+                        avoid: entry.avoid ?? [],
+                        never: entry.never ?? [],
+                        notes: entry.notes
+                };
+        }
+
         let newLearnerName = '';
         let newLearnerNotes = '';
         let newLearnerPerformance: LearnerRecord['performance'] = 'medium';
@@ -44,6 +61,11 @@
         $: sortedLearners = [...learners].sort((a, b) =>
                 a.name.localeCompare(b.name, 'de', { sensitivity: 'base' })
         );
+
+        $: relationshipOptions = sortedLearners.map((entry) => ({ id: entry.id, name: entry.name }));
+        $: availableRelationshipOptions = activeLearner
+                ? relationshipOptions.filter((option) => option.id !== activeLearner.id)
+                : [];
 
         $: activeLearner =
                 activeLearnerId ? learners.find((entry) => entry.id === activeLearnerId) ?? null : null;
@@ -152,6 +174,7 @@
                         performance: newLearnerPerformance,
                         prefer: [],
                         avoid: [],
+                        never: [],
                         notes: newLearnerNotes.trim() || undefined
                 };
 
@@ -169,7 +192,8 @@
                         .map((entry) => ({
                                 ...entry,
                                 prefer: entry.prefer.filter((ref) => ref !== id),
-                                avoid: entry.avoid.filter((ref) => ref !== id)
+                                avoid: entry.avoid.filter((ref) => ref !== id),
+                                never: entry.never.filter((ref) => ref !== id)
                         }));
                 resetResult();
         }
@@ -180,17 +204,26 @@
                 updateLearnerPerformance(learnerId, target.value as LearnerRecord['performance']);
         }
 
-        function handleRelationshipChange(
+        function updateLearnerRelationships(
                 learnerId: string,
-                kind: 'prefer' | 'avoid',
-                event: Event
+                kind: 'prefer' | 'avoid' | 'never',
+                values: string[]
         ) {
-                const target = event.currentTarget as HTMLSelectElement | null;
-                if (!target) return;
+                const sanitized = Array.from(new Set(values.filter((value) => value !== learnerId)));
+                const removeDuplicates = (list: string[]) => list.filter((id) => !sanitized.includes(id));
 
-                const selected = Array.from(target.selectedOptions, (option) => option.value);
                 learners = learners.map((entry) =>
-                        entry.id === learnerId ? { ...entry, [kind]: selected } : entry
+                        entry.id === learnerId
+                                ? {
+                                          ...entry,
+                                          prefer:
+                                                  kind === 'prefer' ? sanitized : removeDuplicates(entry.prefer),
+                                          avoid:
+                                                  kind === 'avoid' ? sanitized : removeDuplicates(entry.avoid),
+                                          never:
+                                                  kind === 'never' ? sanitized : removeDuplicates(entry.never)
+                                  }
+                                : entry
                 );
                 resetResult();
         }
@@ -217,7 +250,7 @@
                 try {
                         const result =
                                 type === 'json' ? await importFromJson(file) : await importFromCsv(file);
-                        learners = result.data.learners;
+                        learners = result.data.learners.map((entry) => normalizeLearner(entry));
                         importMessages = result.warnings;
                         errorMessage = '';
                         resetResult();
@@ -269,7 +302,7 @@
                 if (!browser || !selectedStoredClass) return;
                 const stored = await loadClass(selectedStoredClass);
                 if (!stored) return;
-                learners = stored.data.learners;
+                learners = stored.data.learners.map((entry) => normalizeLearner(entry));
                 className = stored.name;
                 currentClassId = stored.id;
                 resetResult();
@@ -448,7 +481,7 @@
                                                 <div class="min-w-0 flex-1">
                                                         <p class="truncate font-medium">{learner.name}</p>
                                                         <p class="text-xs text-slate-500 dark:text-slate-400">
-                                                                {performanceLabel(learner.performance)} · {learner.prefer.length} Wunschkontakte · {learner.avoid.length} Trennungen
+                                                                {performanceLabel(learner.performance)} · {learner.prefer.length} Wunschkontakte · {learner.avoid.length} Trennungen · {learner.never.length} Nie zusammen
                                                         </p>
                                                 </div>
                                                 <div class="flex items-center gap-2">
@@ -698,49 +731,46 @@
                                                         }
                                                 ></textarea>
                                         </label>
-                                        <div class="grid gap-4 md:grid-cols-2">
-                                                <label class="flex flex-col gap-2 text-sm">
-                                                        <span class="font-medium">Arbeitet gerne mit …</span>
-                                                        <select
-                                                                class="input min-h-[8rem]"
-                                                                multiple
-                                                                on:change={(event) =>
-                                                                        handleRelationshipChange(activeLearner.id, 'prefer', event)
-                                                                }
-                                                        >
-                                                                {#each sortedLearners as other (other.id)}
-                                                                        {#if other.id !== activeLearner.id}
-                                                                                <option
-                                                                                        value={other.id}
-                                                                                        selected={activeLearner.prefer.includes(other.id)}
-                                                                                >
-                                                                                        {other.name}
-                                                                                </option>
-                                                                        {/if}
-                                                                {/each}
-                                                        </select>
-                                                </label>
-                                                <label class="flex flex-col gap-2 text-sm">
-                                                        <span class="font-medium">Soll getrennt werden von …</span>
-                                                        <select
-                                                                class="input min-h-[8rem]"
-                                                                multiple
-                                                                on:change={(event) =>
-                                                                        handleRelationshipChange(activeLearner.id, 'avoid', event)
-                                                                }
-                                                        >
-                                                                {#each sortedLearners as other (other.id)}
-                                                                        {#if other.id !== activeLearner.id}
-                                                                                <option
-                                                                                        value={other.id}
-                                                                                        selected={activeLearner.avoid.includes(other.id)}
-                                                                                >
-                                                                                        {other.name}
-                                                                                </option>
-                                                                        {/if}
-                                                                {/each}
-                                                        </select>
-                                                </label>
+                                        <div class="grid gap-4 md:grid-cols-3">
+                                                <RelationshipSelector
+                                                        label="Arbeitet gerne mit …"
+                                                        selected={activeLearner.prefer}
+                                                        options={availableRelationshipOptions}
+                                                        placeholder="Namen suchen"
+                                                        on:change={({ detail }) =>
+                                                                updateLearnerRelationships(
+                                                                        activeLearner.id,
+                                                                        'prefer',
+                                                                        detail.values
+                                                                )
+                                                        }
+                                                />
+                                                <RelationshipSelector
+                                                        label="Soll getrennt werden von …"
+                                                        selected={activeLearner.avoid}
+                                                        options={availableRelationshipOptions}
+                                                        placeholder="Namen suchen"
+                                                        on:change={({ detail }) =>
+                                                                updateLearnerRelationships(
+                                                                        activeLearner.id,
+                                                                        'avoid',
+                                                                        detail.values
+                                                                )
+                                                        }
+                                                />
+                                                <RelationshipSelector
+                                                        label="Nie in Gruppe mit …"
+                                                        selected={activeLearner.never}
+                                                        options={availableRelationshipOptions}
+                                                        placeholder="Namen suchen"
+                                                        on:change={({ detail }) =>
+                                                                updateLearnerRelationships(
+                                                                        activeLearner.id,
+                                                                        'never',
+                                                                        detail.values
+                                                                )
+                                                        }
+                                                />
                                         </div>
                                 </div>
 
