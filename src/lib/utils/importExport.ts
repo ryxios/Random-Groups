@@ -11,6 +11,7 @@ const learnerSchema = z.object({
   performance: performanceSchema.default('medium'),
   prefer: z.array(z.string()).optional(),
   avoid: z.array(z.string()).optional(),
+  never: z.array(z.string()).optional(),
   notes: z.string().optional()
 });
 
@@ -52,6 +53,7 @@ export async function importFromCsv(file: File): Promise<ImportResult> {
       performance: toPerformance(row.performance),
       prefer: parseList(row.prefer ?? row.prefers ?? ''),
       avoid: parseList(row.avoid ?? row.conflicts ?? ''),
+      never: parseList(row.never ?? row.never_with ?? row.neverWith ?? ''),
       notes: row.notes || undefined
     }));
 
@@ -73,6 +75,10 @@ export function exportToCsv(data: ClassData, filename: string): void {
       .filter(Boolean)
       .join('; '),
     avoid: learner.avoid
+      .map((id) => data.learners.find((l) => l.id === id)?.name ?? '')
+      .filter(Boolean)
+      .join('; '),
+    never: learner.never
       .map((id) => data.learners.find((l) => l.id === id)?.name ?? '')
       .filter(Boolean)
       .join('; '),
@@ -119,11 +125,14 @@ function normalizeLearners(raw: RawLearner[]): ImportResult {
       .filter((value): value is string => value !== null),
     avoid: (entry.avoid ?? [])
       .map((nameOrId) => resolveReference(nameOrId, nameToId))
+      .filter((value): value is string => value !== null),
+    never: (entry.never ?? [])
+      .map((nameOrId) => resolveReference(nameOrId, nameToId))
       .filter((value): value is string => value !== null)
   }));
 
   const invalidRefs = learnersWithIds.flatMap((entry) => {
-    const refs = [...(entry.prefer ?? []), ...(entry.avoid ?? [])];
+    const refs = [...(entry.prefer ?? []), ...(entry.avoid ?? []), ...(entry.never ?? [])];
     return refs.filter((ref) => !resolveReference(ref, nameToId));
   });
 

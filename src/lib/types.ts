@@ -6,6 +6,7 @@ export interface LearnerRecord {
   performance: PerformanceLevel;
   prefer: string[];
   avoid: string[];
+  never: string[];
   notes?: string;
 }
 
