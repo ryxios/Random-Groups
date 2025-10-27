@@ -272,24 +272,19 @@
                 resetResult();
         }
 
-        async function handleGenerate() {
+        function requestGrouping(activeLearners: LearnerRecord[]) {
                 if (!worker) return;
                 generating = true;
                 errorMessage = '';
-                worker.postMessage({ learners, config });
+                worker.postMessage({ learners: activeLearners, config });
+        }
+
+        async function handleGenerate() {
+                requestGrouping(learners);
         }
 
         function handleRepeat() {
-                if (!worker) return;
-                generating = true;
-                errorMessage = '';
-                const relationshipFreeLearners = learners.map((entry) => ({
-                        ...entry,
-                        prefer: [],
-                        avoid: [],
-                        never: []
-                }));
-                worker.postMessage({ learners: relationshipFreeLearners, config });
+                requestGrouping(learners);
         }
 
         function handleExport(type: 'csv' | 'json') {
@@ -686,7 +681,7 @@
                                         on:click={handleRepeat}
                                         disabled={generating}
                                 >
-                                        Wiederholen (ohne Beziehungen)
+                                        Wiederholen
                                 </button>
                         </div>
                         <div class="grid gap-4 md:grid-cols-2">
