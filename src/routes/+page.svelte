@@ -279,6 +279,19 @@
                 worker.postMessage({ learners, config });
         }
 
+        function handleRepeat() {
+                if (!worker) return;
+                generating = true;
+                errorMessage = '';
+                const relationshipFreeLearners = learners.map((entry) => ({
+                        ...entry,
+                        prefer: [],
+                        avoid: [],
+                        never: []
+                }));
+                worker.postMessage({ learners: relationshipFreeLearners, config });
+        }
+
         function handleExport(type: 'csv' | 'json') {
                 if (!learners.length) {
                         errorMessage = 'Es sind keine Lernenden zum Export vorhanden.';
@@ -665,7 +678,17 @@
 
         {#if result}
                 <section class="grid gap-6 rounded-xl bg-surface-100-900/60 p-6 shadow">
-                        <h2 class="text-xl font-semibold">Vorschlag</h2>
+                        <div class="flex flex-wrap items-center justify-between gap-4">
+                                <h2 class="text-xl font-semibold">Vorschlag</h2>
+                                <button
+                                        class="btn border border-slate-300 bg-white text-slate-900 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                                        type="button"
+                                        on:click={handleRepeat}
+                                        disabled={generating}
+                                >
+                                        Wiederholen (ohne Beziehungen)
+                                </button>
+                        </div>
                         <div class="grid gap-4 md:grid-cols-2">
                                 {#each result.groups as group (group.id)}
                                         <article class="card space-y-3">
