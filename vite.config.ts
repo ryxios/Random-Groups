@@ -3,6 +3,7 @@ import { SvelteKitPWA } from '@vite-pwa/sveltekit';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+        base: process.env.GITHUB_PAGES ? '/Random-Groups/'  : '/',
         plugins: [
                 sveltekit(),
                 SvelteKitPWA({
@@ -10,7 +11,8 @@ export default defineConfig({
                         manifest: {
                                 name: 'Random Groups Planner',
                                 short_name: 'Groups',
-                                start_url: '/',
+                                start_url: import.meta.env.BASE_URL,
+                                scope: import.meta.env.BASE_URL,
                                 display: 'standalone',
                                 background_color: '#0f172a',
                                 theme_color: '#2563eb',
