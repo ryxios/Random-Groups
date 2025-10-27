@@ -50,11 +50,18 @@ function buildGroups(learners: LearnerRecord[], config: GroupingConfig): Groupin
     score: 0
   }));
 
-  const sortedLearners = activeLearners.sort((a, b) => {
-    const perfDelta = PERFORMANCE_WEIGHT[b.performance] - PERFORMANCE_WEIGHT[a.performance];
-    if (perfDelta !== 0) return perfDelta;
-    return b.prefer.length - a.prefer.length;
-  });
+  const prioritizedLearners = activeLearners
+    .map((learner) => ({ learner, priority: Math.random() }))
+    .sort((a, b) => {
+      const perfDelta =
+        PERFORMANCE_WEIGHT[b.learner.performance] - PERFORMANCE_WEIGHT[a.learner.performance];
+      if (perfDelta !== 0) return perfDelta;
+      const preferDelta = b.learner.prefer.length - a.learner.prefer.length;
+      if (preferDelta !== 0) return preferDelta;
+      return a.priority - b.priority;
+    });
+
+  const sortedLearners = prioritizedLearners.map((entry) => entry.learner);
 
   const unassigned: LearnerRecord[] = [];
 
