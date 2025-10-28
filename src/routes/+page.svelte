@@ -637,6 +637,24 @@
                                                         }}
                                                 />
                                         </label>
+                                        <div class="flex flex-wrap gap-2">
+                                                {#each [2, 3, 4, 5, 6] as preset}
+                                                        <button
+                                                                class={`btn border text-sm transition ${
+                                                                        config.groupSize === preset
+                                                                                ? 'border-transparent bg-indigo-600 text-white hover:bg-indigo-700'
+                                                                                : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700'
+                                                                }`}
+                                                                type="button"
+                                                                on:click={() => {
+                                                                        config = { ...config, groupSize: preset };
+                                                                        resetResult();
+                                                                }}
+                                                        >
+                                                                {preset}
+                                                        </button>
+                                                {/each}
+                                        </div>
                                 {:else}
                                         <label class="flex flex-col gap-2">
                                                 <span class="text-sm font-medium">Anzahl Gruppen</span>
@@ -652,6 +670,24 @@
                                                         }}
                                                 />
                                         </label>
+                                        <div class="flex flex-wrap gap-2">
+                                                {#each [2, 3, 4, 5, 6] as preset}
+                                                        <button
+                                                                class={`btn border text-sm transition ${
+                                                                        config.groupCount === preset
+                                                                                ? 'border-transparent bg-indigo-600 text-white hover:bg-indigo-700'
+                                                                                : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700'
+                                                                }`}
+                                                                type="button"
+                                                                on:click={() => {
+                                                                        config = { ...config, groupCount: preset };
+                                                                        resetResult();
+                                                                }}
+                                                        >
+                                                                {preset}
+                                                        </button>
+                                                {/each}
+                                        </div>
                                 {/if}
                                 <button
                                         class="btn bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
